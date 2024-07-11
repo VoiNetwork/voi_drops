@@ -64,26 +64,30 @@ async function getHighestStoredBlock() {
     let last_block = highestStoredBlock;
     while(true) {
         if (last_block >= end_block) {
-            process.stdout.clearLine();
-            process.stdout.cursorTo(0);
-            process.stdout.write(`Reached end of chain, sleeping for 10 seconds...`);
+            console.log(`Reached end of chain, sleeping for 10 seconds...`);
             await sleep(10000);
             try {
                 end_block = (await algod.status().do())['last-round'];
             }
             catch (error) {
-                process.stdout.clearLine();
-                process.stdout.cursorTo(0);
-                process.stdout.write(`Error retrieving end block from API: ${error.message}, retrying.`);
+                console.log(`Error retrieving end block from API: ${error.message}, retrying.`);
                 await sleep(10000); // wait 10 seconds before trying again
             }
             continue;
         }
 		let i = last_block + 1;
 
-        process.stdout.clearLine();
-		process.stdout.cursorTo(0);
-		process.stdout.write(`Retrieving block ${i} (${end_block - i} behind)`);
+        let logInterval = 3;
+        if ((end_block - i) >= 1000) {
+            logInterval = 1000;
+        } else if ((end_block - i) < 100 && (end_block - i) >= 10) {
+            logInterval = 10;
+        }
+
+        if ((end_block - i) % logInterval === 0 || (end_block - i) < logInterval) {
+            const toBlock = i + logInterval > end_block ? end_block : i + logInterval - 1;
+            console.log(`Retrieving block ${i} to ${toBlock} (${end_block - i} behind)`);
+        }
         
         try {
             const timeoutPromise = new Promise((resolve, reject) => {
@@ -99,12 +103,10 @@ async function getHighestStoredBlock() {
             // store this block and its proposer in the database
             await storeBlockInDb(i, addr, timestamp);
         } catch (error) {
-            process.stdout.clearLine();
-            process.stdout.cursorTo(0);
             if (error.message === 'Request timed out') {
-                process.stdout.write(`Error retrieving block ${i} from API: request timed out, retrying.`);
+                console.log(`Error retrieving block ${i} from API: request timed out, retrying.`);
             } else {
-                process.stdout.write(`Error retrieving block ${i} from API: ${error.message}, retrying.`);
+                console.log(`Error retrieving block ${i} from API: ${error.message}, retrying.`);
             }
             await sleep(10000); // wait 10 seconds before trying again
             continue;
