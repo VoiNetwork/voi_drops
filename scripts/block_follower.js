@@ -24,6 +24,20 @@ function createBlocksTableIfNotExists() {
     });
 }
 
+function createIndexes() {
+    return new Promise((resolve, reject) => {
+        db.serialize(() => {
+            db.run(`CREATE INDEX IF NOT EXISTS proposer_idx ON blocks (proposer);`, err => {
+                if (err) return reject(err);
+                db.run(`CREATE INDEX IF NOT EXISTS timestamps_idx ON blocks (timestamp);`, err => {
+                    if (err) return reject(err);
+                    resolve();
+                });
+            });
+        });
+    });
+}
+
 function storeBlockInDb(block, proposer, timestamp) {
     return new Promise((resolve, reject) => {
         db.serialize(() => {
@@ -54,6 +68,7 @@ async function getHighestStoredBlock() {
 (async () => {
 	// Ensure the blocks table exists
 	await createBlocksTableIfNotExists();
+    await createIndexes()
 
     const highestStoredBlock = await getHighestStoredBlock();
     console.log(`Highest stored block in the database: ${highestStoredBlock}`);
