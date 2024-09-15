@@ -27,7 +27,7 @@ import minimist from 'minimist';
 import csvWriter from 'csv-writer';
 import { algod, indexer } from '../include/algod.js';
 import { sleep, fetchBlacklist, validateFile, removeAndTrackDuplicates, removeInvalidAddresses, sanitizeWithRemovals, csvToJson } from '../include/utils.js';
-import Contract from 'arc200js';
+import { arc200 } from "ulujs";
 
 const FLAT_FEE = 1000; // flat fee amount, 1000 microvoi == .001 voi
 
@@ -232,7 +232,7 @@ const waitForConfirmation = async (algod, txId, timeout) => {
                 simulate: false,
                 waitForConfirmation: true,
             };
-            contract = new Contract(arc200TokenId, algod, indexer, opts);
+            contract = new arc200(arc200TokenId, algod, indexer, opts);
             arcBal = await contract.arc200_balanceOf(sender.addr);
             
             if (arcBal.error) throw new Error(arcBal.error);
