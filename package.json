@@ -19,7 +19,6 @@
   "license": "ISC",
   "dependencies": {
     "algosdk": "^2.7.0",
-    "arc200js": "^2.3.3",
     "compare-versions": "^6.1.0",
     "config": "^3.3.9",
     "csv-writer": "^1.6.0",
