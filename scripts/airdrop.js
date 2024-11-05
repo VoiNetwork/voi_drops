@@ -192,14 +192,6 @@ const waitForConfirmation = async (algod, txId, timeout) => {
         }
     }
 
-    // pull in additional blacklist addresses from API
-    try {
-        const blacklistFromApi = await fetchBlacklist();
-        blacklist = blacklist.concat(blacklistFromApi);
-    } catch (error) {
-        exitMenu(`Unable to fetch blacklist from API: `, error);
-    }
-
     let alreadySent = [];
     let resume = false;
 

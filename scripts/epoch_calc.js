@@ -20,7 +20,7 @@ import { algod } from '../include/algod.js';
 import { sleep, fetchBlacklist, writeToCSV, getClosestBlock, validateFile, csvToJson } from '../include/utils.js';
 import sqlite3 from 'sqlite3';
 
-const db = new sqlite3.Database('proposers.db');
+const db = new sqlite3.Database('../db/proposers.db');
 
 // show help menu and exit
 export const exitMenu = (err) => {
@@ -145,12 +145,12 @@ async function getHighestStoredBlock() {
     }
 
     // pull in additional blacklist addresses from API
-    try {
-        const blacklistFromApi = await fetchBlacklist();
-        blacklist = blacklist.concat(blacklistFromApi);
-    } catch (error) {
-        exitMenu(`Unable to fetch blacklist from API: `, error);
-    }
+    // try {
+    //     const blacklistFromApi = await fetchBlacklist();
+    //     blacklist = blacklist.concat(blacklistFromApi);
+    // } catch (error) {
+    //     exitMenu(`Unable to fetch blacklist from API: `, error);
+    // }
 	blacklist = blacklist.map(item => item.account);
 
 	let proposers = {};
