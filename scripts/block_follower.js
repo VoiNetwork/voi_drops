@@ -60,7 +60,7 @@ async function getHighestStoredBlock() {
     return new Promise((resolve, reject) => {
         db.get("SELECT MAX(block) as highestBlock FROM blocks", [], (err, row) => {
             if (err) return reject(err);
-            resolve(row && row.highestBlock >= 1460000 ? row.highestBlock : 1460000);
+            resolve(row ? row.highestBlock : 0);
         });
     });
 }
