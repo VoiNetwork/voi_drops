@@ -1,14 +1,14 @@
 import algosdk from 'algosdk';
 import 'dotenv/config';
 
-// destruct from env vars, with default values to nodly
+// destruct from env vars, with default values to nodely
 const {
     ALGOD_TOKEN = "",
-    ALGOD_HOST = "https://testnet-api.voi.nodly.io",
+    ALGOD_HOST = "https://testnet-api.voi.nodely.dev",
     ALGOD_PORT = "443",
 
     INDEXER_TOKEN = "",
-    INDEXER_HOST = "https://testnet-idx.voi.nodly.io",
+    INDEXER_HOST = "https://testnet-idx.voi.nodely.dev",
     INDEXER_PORT = "443",
 } = process.env;
 
