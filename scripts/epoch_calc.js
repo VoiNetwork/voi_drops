@@ -20,7 +20,7 @@ import { algod } from '../include/algod.js';
 import { sleep, fetchBlacklist, writeToCSV, getClosestBlock, validateFile, csvToJson } from '../include/utils.js';
 import sqlite3 from 'sqlite3';
 
-const db = new sqlite3.Database('proposers.db');
+let db;
 
 // show help menu and exit
 export const exitMenu = (err) => {
@@ -30,13 +30,14 @@ export const exitMenu = (err) => {
 }
 
 export const getFilenameArguments = () => {
-    const args = minimist(process.argv.slice(2));
-    let start_block = (args.s)??=null;
+	const args = minimist(process.argv.slice(2));
+	let start_block = (args.s)??=null;
     let end_block = (args.e)??=null;
 	let epoch_block_reward = (args.r)??=0;
 	let output_filename = (args.f)??='epoch_rewards.csv';
     let blackList = (args.b)??=null;
-    return [ start_block, end_block, epoch_block_reward, output_filename, blackList ];
+	db = new sqlite3.Database((args.d) ?? 'proposers.db');
+	return [ start_block, end_block, epoch_block_reward, output_filename, blackList ];
 }
 
 function createBlocksTableIfNotExists() {
@@ -144,13 +145,13 @@ async function getHighestStoredBlock() {
         }
     }
 
-    // pull in additional blacklist addresses from API
-    try {
-        const blacklistFromApi = await fetchBlacklist();
-        blacklist = blacklist.concat(blacklistFromApi);
-    } catch (error) {
-        exitMenu(`Unable to fetch blacklist from API: `, error);
-    }
+    // // pull in additional blacklist addresses from API
+    // try {
+    //     const blacklistFromApi = await fetchBlacklist();
+    //     blacklist = blacklist.concat(blacklistFromApi);
+    // } catch (error) {
+    //     exitMenu(`Unable to fetch blacklist from API: `, error);
+    // }
 	blacklist = blacklist.map(item => item.account);
 
 	let proposers = {};
