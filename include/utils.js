@@ -4,9 +4,38 @@ import csv from 'fast-csv';
 import csvWriter from 'csv-writer';
 import fetch from 'node-fetch';
 import { algod } from '../include/algod.js';
+import sqlite3 from "sqlite3";
 
 export const sleep = async (ms) => {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export const acquireDb = async (filename, options = {}) => {
+    const { wal = true } = options;
+    return new Promise((resolve, reject) => {
+        const db = new sqlite3.Database(filename, (err) => {
+            if (err) {
+                console.error('Error opening database:', err.message);
+                return reject(err);
+            } else {
+                if (wal) {
+                    db.serialize(() => {
+                        db.run('PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=512;', (err) => {
+                            if (err) {
+                                console.error('Error setting PRAGMA options:', err.message);
+                                return reject(err);
+                            } else {
+                                console.log('WAL mode enabled and wal_autocheckpoint set to 512 pages.');
+                                resolve(db);
+                            }
+                        });
+                    });
+                } else {
+                    resolve(db);
+                }
+            }
+        });
+    });
 }
 
 // TODO: validate csv

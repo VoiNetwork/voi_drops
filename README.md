@@ -71,7 +71,7 @@ locate the first block available on the `START` date and the last block availabl
 
 Usage: `npm run epoch_calc -- -s START -e END -r EPOCHREWARD [-f FILENAME] [-b BLACKLIST]`  
 Example: `npm run epoch_calc -- -s 240000 -e 250000 -r 2500000 -f rewards.csv -b blacklist.csv -d /db/proposers.db`
-Example: `npm run epoch_calc -- -s 2023-09-25 -e 2023-10-01 -r 2500000 -f rewards.csv -b blacklist.csv -d /db/proposers.db`
+Example: `npm run epoch_calc -- -s 2024-11-01 -e 2024-11-01 -r 2500000 -f rewards.csv -b blacklist.csv -d /db/proposers.db`
 
 # Epoch reward calculation from API - epoch_calc_api.js
 

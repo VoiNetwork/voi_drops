@@ -15,10 +15,12 @@
 
 import algosdk from 'algosdk';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import minimist from 'minimist';
 import { algod } from '../include/algod.js';
 import { sleep, fetchBlacklist, writeToCSV, getClosestBlock, validateFile, csvToJson } from '../include/utils.js';
-import sqlite3 from 'sqlite3';
+import { acquireDb } from '../include/utils.js';
 
 let db;
 
@@ -36,8 +38,8 @@ export const getFilenameArguments = () => {
 	let epoch_block_reward = (args.r)??=0;
 	let output_filename = (args.f)??='epoch_rewards.csv';
     let blackList = (args.b)??=null;
-	db = new sqlite3.Database((args.d) ?? 'proposers.db');
-	return [ start_block, end_block, epoch_block_reward, output_filename, blackList ];
+	let dbFilename = (args.db)??='proposers.db';
+	return [ start_block, end_block, epoch_block_reward, output_filename, blackList, dbFilename ];
 }
 
 function createBlocksTableIfNotExists() {
@@ -85,141 +87,154 @@ async function getHighestStoredBlock() {
 }
 
 (async () => {
-	const [ start_time, end_time, epoch_block_reward, output_filename, blacklistFileName ] = getFilenameArguments();
+	const [ start_time, end_time, epoch_block_reward, output_filename, blacklistFileName, dbFilename ] = getFilenameArguments();
 
-	// Ensure the blocks table exists
-	await createBlocksTableIfNotExists();
+	const tmpDir = os.tmpdir();
+	const tmpDbPath = path.join(tmpDir, path.basename(dbFilename));
 
-	if (start_time == null || end_time == null) {
-		exitMenu(`Start and end blocks required`);
-	}
+	try {
+		// Copy dbFilename to a system temporary folder
+		fs.copyFileSync(dbFilename, tmpDbPath);
+		console.log(`Database copied to temporary folder: ${tmpDbPath}`);
 
-	const highestStoredBlock = await getHighestStoredBlock();
-    console.log(`Highest stored block in the database: ${highestStoredBlock}`);
+		db = await acquireDb(tmpDbPath, {wal: false});
 
-	let start_block = start_time;
-	let end_block = end_time;
+		// Ensure the blocks table exists
+		await createBlocksTableIfNotExists();
 
-	// find start and end blocks for epoch
-	console.log(`Looking for starting and ending blocks for range: ${start_time} to ${end_time}...`);
+		if (start_time == null || end_time == null) {
+			exitMenu(`Start and end blocks required`);
+		}
 
-	if (start_time.length == 10 && start_time.indexOf('-') !== -1) {
-		const startTime = new Date(start_time+'T00:00:00Z');
-		start_block = await getClosestBlock(startTime);
-	}
-	const startBlockDetail = await algod.block(start_block).do();
-	const startBlockTime = new Date(startBlockDetail.block.ts * 1000);
+		const highestStoredBlock = await getHighestStoredBlock();
+		console.log(`Highest stored block in the database: ${highestStoredBlock}`);
 
-	let endBlockDetail = null;
-	let endBlockTime = null;
-	if (end_time.length == 10 && end_time.indexOf('-') !== -1) {
-		const endTime = new Date(end_time+'T23:59:59Z');
-		end_block = await getClosestBlock(endTime);
+		let start_block = start_time;
+		let end_block = end_time;
 
-		endBlockDetail = await algod.block(end_block).do();
-		endBlockTime = new Date(endBlockDetail.block.ts * 1000);
-		if (endBlockTime > endTime) {
-			end_block--;
+		// find start and end blocks for epoch
+		console.log(`Looking for starting and ending blocks for range: ${start_time} to ${end_time}...`);
+
+		if (start_time.length == 10 && start_time.indexOf('-') !== -1) {
+			const startTime = new Date(start_time + 'T00:00:00Z');
+			start_block = await getClosestBlock(startTime);
+		}
+		const startBlockDetail = await algod.block(start_block).do();
+		const startBlockTime = new Date(startBlockDetail.block.ts * 1000);
+
+		let endBlockDetail = null;
+		let endBlockTime = null;
+		if (end_time.length == 10 && end_time.indexOf('-') !== -1) {
+			const endTime = new Date(end_time + 'T23:59:59Z');
+			end_block = await getClosestBlock(endTime);
+
+			endBlockDetail = await algod.block(end_block).do();
+			endBlockTime = new Date(endBlockDetail.block.ts * 1000);
+			if (endBlockTime > endTime) {
+				end_block--;
+				endBlockDetail = await algod.block(end_block).do();
+				endBlockTime = new Date(endBlockDetail.block.ts * 1000);
+			}
+		} else {
 			endBlockDetail = await algod.block(end_block).do();
 			endBlockTime = new Date(endBlockDetail.block.ts * 1000);
 		}
-	}
-	else {
-		endBlockDetail = await algod.block(end_block).do();
-		endBlockTime = new Date(endBlockDetail.block.ts * 1000);
-	}
 
-	console.log(`Start Block: ${start_block} @ ${startBlockTime.toUTCString()}`);
-	console.log(`End Block:   ${end_block} @ ${endBlockTime.toUTCString()}`);
+		console.log(`Start Block: ${start_block} @ ${startBlockTime.toUTCString()}`);
+		console.log(`End Block:   ${end_block} @ ${endBlockTime.toUTCString()}`);
 
-	// calc total blocks in epoch
-	const epoch_total_blocks = end_block-start_block+1;
-	console.log(`Total blocks produced in Epoch: ${epoch_total_blocks}`);
-	console.log(`Finding block proposers between blocks ${start_block} and ${end_block}...`);
+		// calc total blocks in epoch
+		const epoch_total_blocks = end_block - start_block + 1;
+		console.log(`Total blocks produced in Epoch: ${epoch_total_blocks}`);
+		console.log(`Finding block proposers between blocks ${start_block} and ${end_block}...`);
 
-    // handle blacklist
-    let blacklist = []; // list of addresses to not send to
-    if (blacklistFileName != null && blacklistFileName != false) {
-        if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
-            blacklist = await csvToJson(blacklistFileName);
-        }
-    }
-
-    // // pull in additional blacklist addresses from API
-    // try {
-    //     const blacklistFromApi = await fetchBlacklist();
-    //     blacklist = blacklist.concat(blacklistFromApi);
-    // } catch (error) {
-    //     exitMenu(`Unable to fetch blacklist from API: `, error);
-    // }
-	blacklist = blacklist.map(item => item.account);
-
-	let proposers = {};
-	let proposedBlockCount = 0;
-
-	for(let i = start_block; i <= end_block; i++) {
-		if (i%10 == 0) {
-			process.stdout.clearLine();
-			process.stdout.cursorTo(0);
-			process.stdout.write(`Retrieving block ${i} (${end_block - i} remaining)`);
-		}
-
-        let addr = await getProposerFromDb(i);
-
-		if (!addr) {
-			try {
-				const blk = await algod.block(i).do();
-				addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
-				const timestamp = new Date(blk.block.ts*1000).toISOString();
-	
-				// store this block and its proposer in the database
-				await storeBlockInDb(i, addr, timestamp);
-			} catch (error) {
-				process.stdout.clearLine();
-				process.stdout.cursorTo(0);
-				process.stdout.write(`Error retrieving block ${i} from API, retrying.`);
-				await sleep(10000); // wait 10 seconds before trying again
-				i--;  // Decrement the block counter to retry the same block after sleeping.
-				continue;
+		// handle blacklist
+		let blacklist = []; // list of addresses to not send to
+		if (blacklistFileName != null && blacklistFileName != false) {
+			if (fs.existsSync(blacklistFileName) && validateFile(blacklistFileName)) {
+				blacklist = await csvToJson(blacklistFileName);
 			}
 		}
-	
-        // skip if address is in blacklist
-        if (blacklist.includes(addr)) continue;
 
-        if (typeof proposers[addr] == 'undefined') {
-            proposers[addr] = 1;
-        } else {
-            proposers[addr]++;
-        }
-		proposedBlockCount++;
+		// // pull in additional blacklist addresses from API
+		// try {
+		//     const blacklistFromApi = await fetchBlacklist();
+		//     blacklist = blacklist.concat(blacklistFromApi);
+		// } catch (error) {
+		//     exitMenu(`Unable to fetch blacklist from API: `, error);
+		// }
+		blacklist = blacklist.map(item => item.account);
+
+		let proposers = {};
+		let proposedBlockCount = 0;
+
+		for (let i = start_block; i <= end_block; i++) {
+			if (i % 10 == 0) {
+				process.stdout.clearLine();
+				process.stdout.cursorTo(0);
+				process.stdout.write(`Retrieving block ${i} (${end_block - i} remaining)`);
+			}
+
+			let addr = await getProposerFromDb(i);
+
+			if (!addr) {
+				try {
+					const blk = await algod.block(i).do();
+					addr = algosdk.encodeAddress(blk["cert"]["prop"]["oprop"]);
+					const timestamp = new Date(blk.block.ts * 1000).toISOString();
+
+					// store this block and its proposer in the database
+					await storeBlockInDb(i, addr, timestamp);
+				} catch (error) {
+					process.stdout.clearLine();
+					process.stdout.cursorTo(0);
+					process.stdout.write(`Error retrieving block ${i} from API, retrying.`);
+					await sleep(10000); // wait 10 seconds before trying again
+					i--;  // Decrement the block counter to retry the same block after sleeping.
+					continue;
+				}
+			}
+
+			// skip if address is in blacklist
+			if (blacklist.includes(addr)) continue;
+
+			if (typeof proposers[addr] == 'undefined') {
+				proposers[addr] = 1;
+			} else {
+				proposers[addr]++;
+			}
+			proposedBlockCount++;
+		}
+		console.log('');
+
+		// print out proposers list with tokens owed based on percentage proposed
+		let rewards = [];
+		for (let p in proposers) {
+			const pct = proposers[p] / proposedBlockCount;
+			const reward = Math.round((proposers[p] / proposedBlockCount) * epoch_block_reward * Math.pow(10, 6));
+			console.log(`${p}: ${proposers[p]} - ${pct} - ${reward / Math.pow(10, 6)} VOI`);
+
+			/*rewards.push({
+                account: p,
+                userType: proposers[p],
+                percent: pct,
+                tokenAmount: (reward / Math.pow(10,6))+' VOI',
+            });*/
+
+			rewards.push({
+				account: p,
+				userType: 'node',
+				tokenAmount: reward,
+				blocks: proposers[p],
+				percent: pct,
+			});
+		}
+		console.log(`Total blocks produced by non-blacklisted addresses: ${proposedBlockCount}`);
+
+		// write out to CSV file
+		writeToCSV(rewards, output_filename);
+	} finally {
+		fs.unlinkSync(tmpDbPath);
+		console.log(`Temporary database removed: ${tmpDbPath}`);
 	}
-	console.log('');
-
-	// print out proposers list with tokens owed based on percentage proposed
-	let rewards = [];
-	for(let p in proposers) {
-		const pct = proposers[p] / proposedBlockCount;
-		const reward = Math.round((proposers[p] / proposedBlockCount) * epoch_block_reward * Math.pow(10,6));
-		console.log(`${p}: ${proposers[p]} - ${pct} - ${reward / Math.pow(10,6)} VOI`);
-
-		/*rewards.push({
-			account: p,
-			userType: proposers[p],
-			percent: pct,
-			tokenAmount: (reward / Math.pow(10,6))+' VOI',
-		});*/
-
-		rewards.push({
-			account: p,
-			userType: 'node',
-			tokenAmount: reward,
-			blocks: proposers[p],
-			percent: pct,
-		});
-	}
-	console.log(`Total blocks produced by non-blacklisted addresses: ${proposedBlockCount}`);
-
-	// write out to CSV file
-	writeToCSV(rewards,output_filename);
 })();

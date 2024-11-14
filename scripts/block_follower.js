@@ -2,11 +2,12 @@ import sqlite3 from 'sqlite3';
 import algosdk from 'algosdk';
 import { algod } from '../include/algod.js';
 import minimist from 'minimist';
+import { acquireDb } from '../include/utils.js';
 
 const args = minimist(process.argv.slice(2));
 let filename = (args.f)??='proposers.db';
 
-const db = new sqlite3.Database(filename);
+const db = await acquireDb(filename);
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function createBlocksTableIfNotExists() {
