@@ -235,6 +235,5 @@ async function getHighestStoredBlock() {
 		writeToCSV(rewards, output_filename);
 	} finally {
 		fs.unlinkSync(tmpDbPath);
-		console.log(`Temporary database removed: ${tmpDbPath}`);
 	}
 })();

@@ -25,7 +25,6 @@ export const acquireDb = async (filename, options = {}) => {
                                 console.error('Error setting PRAGMA options:', err.message);
                                 return reject(err);
                             } else {
-                                console.log('WAL mode enabled and wal_autocheckpoint set to 512 pages.');
                                 resolve(db);
                             }
                         });
