@@ -16,4 +16,4 @@ RUN npm install
 COPY scripts ./scripts
 COPY include ./include
 
-CMD [ "node", "/app/scripts/block_follower.js", "-f", "/db/proposers.db" ]
+CMD [ "tail", "-f", "/dev/null" ]
